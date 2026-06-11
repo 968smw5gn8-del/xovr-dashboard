@@ -164,8 +164,37 @@ document.addEventListener('DOMContentLoaded', () => {
     return Number.isFinite(v) ? v : 0;
   }
 
+  // Dynamic slider range logic
+  function updateSliderRanges() {
+    // Ensure sliders can cover typed numeric values and provide headroom
+    const last = toNum(lastVal);
+    const ipo = toNum(ipoVal);
+
+    // Strategy: slider max = max(default, ceil(currentValue * 2))
+    const defaultLastMax = 200;
+    const defaultIpoMax = 300;
+
+    const newLastMax = Math.max(defaultLastMax, Math.ceil(last * 2));
+    const newIpoMax = Math.max(defaultIpoMax, Math.ceil(ipo * 2));
+
+    lastValSlider.max = newLastMax;
+    ipoValSlider.max = newIpoMax;
+
+    // If current slider values exceed new max, clamp them
+    if (parseFloat(lastValSlider.value) > newLastMax) lastValSlider.value = newLastMax;
+    if (parseFloat(ipoValSlider.value) > newIpoMax) ipoValSlider.value = newIpoMax;
+  }
+
   function syncFromInput(inputEl, sliderEl) {
-    sliderEl.value = inputEl.value;
+    const val = parseFloat(inputEl.value);
+    if (Number.isFinite(val)) {
+      // if typed value exceeds slider max, expand the slider max with some headroom
+      if (val > parseFloat(sliderEl.max)) {
+        sliderEl.max = Math.ceil(val * 2);
+      }
+      sliderEl.value = inputEl.value;
+    }
+    updateSliderRanges();
     calculate();
   }
 
@@ -202,8 +231,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const newnav = nav0 * (1 + impact);
 
     repricingEl.innerText = (repricing * 100).toFixed(2) + "%";
-    remainingEl.innerText = (remaining * 100).toFixed(02) + "%";
-    impactEl.innerText = (impact * 100).toFixed(02) + "%";
+    remainingEl.innerText = (remaining * 100).toFixed(2) + "%";
+    impactEl.innerText = (impact * 100).toFixed(2) + "%";
     newnavEl.innerText = newnav.toFixed(2);
 
     updateCharts();
@@ -215,6 +244,7 @@ document.addEventListener('DOMContentLoaded', () => {
     lastVal.value = 100; lastValSlider.value = 100;
     ipoVal.value = 175; ipoValSlider.value = 175;
     partial.value = 0.30; partialSlider.value = 0.30;
+    updateSliderRanges();
     calculate();
   });
   bullBtn.addEventListener('click', () => {
@@ -222,6 +252,7 @@ document.addEventListener('DOMContentLoaded', () => {
     lastVal.value = 95; lastValSlider.value = 95;
     ipoVal.value = 200; ipoValSlider.value = 200;
     partial.value = 0.10; partialSlider.value = 0.10;
+    updateSliderRanges();
     calculate();
   });
   bearBtn.addEventListener('click', () => {
@@ -229,6 +260,7 @@ document.addEventListener('DOMContentLoaded', () => {
     lastVal.value = 105; lastValSlider.value = 105;
     ipoVal.value = 150; ipoValSlider.value = 150;
     partial.value = 0.50; partialSlider.value = 0.50;
+    updateSliderRanges();
     calculate();
   });
 
@@ -287,7 +319,7 @@ document.addEventListener('DOMContentLoaded', () => {
     results.sort((a,b)=>a-b);
     const idx = n => Math.max(0, Math.min(trials-1, Math.floor(n*trials)));
     p5.innerText = results[idx(0.05)].toFixed(2);
-    p50.innerText = results[idx(0.50)].toFixed(02) + "%";
+    p50.innerText = results[idx(0.50)].toFixed(2);
     p95.innerText = results[idx(0.95)].toFixed(2);
 
     if (chartMC) chartMC.destroy();
@@ -301,7 +333,8 @@ document.addEventListener('DOMContentLoaded', () => {
   // Theme toggle
   toggleModeBtn.addEventListener('click', ()=>document.body.classList.toggle('light'));
 
-  // initial compute
+  // initial compute + init sliders range
+  updateSliderRanges();
   calculate();
 });
 </script>

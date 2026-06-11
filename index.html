@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
+<title>XOVR NAV Dashboard</title>
+
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#121212">
+
+<script>
+  if ("serviceWorker" in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register("service-worker.js").catch(()=>{/*fail quietly*/});
+    });
+  }
+</script>
+
+<style>
+  :root {
+    --bg: #121212;
+    --card: #1e1e1e;
+    --text: #e0e0e0;
+    --accent: #4fc3f7;
+    --input-bg: #2a2a2a;
+    --input-border: #444;
+  }
+  .light {
+    --bg: #f5f5f5;
+    --card: #ffffff;
+    --text: #222;
+    --accent: #007aff;
+    --input-bg: #fafafa;
+    --input-border: #ccc;
+  }
+  body { background: var(--bg); color: var(--text); font-family: -apple-system,BlinkMacSystemFont,Arial; margin: 12px; transition: background .3s,color .3s; }
+  h1,h2 { color: var(--accent); margin-bottom: 12px; font-size: 1.4rem; }
+  .card { background: var(--card); padding: 16px; border-radius: 12px; margin-bottom: 16px; transition: background .3s; }
+  label { font-size: .9rem; display: block; margin-bottom: 6px; }
+  .row { display:flex; align-items:center; gap:12px; }
+  .row .meta { font-size:0.85rem; color:var(--text); opacity:0.8; margin-left:auto; }
+  input[type=number] { width: 100%; padding: 10px; background: var(--input-bg); border: 1px solid var(--input-border); border-radius: 6px; color: var(--text); margin-bottom: 8px; font-size: 1rem; }
+  .slider { width: 100%; margin: 6px 0 14px 0; }
+  button { background: var(--accent); color: #000; padding: 10px 14px; border: none; border-radius: 6px; font-size: 1rem; margin-right: 8px; margin-top: 6px; }
+  .chart-container { width: 100%; height: 260px; }
+  /* Make specific charts more responsive on narrow screens */
+  #chartIPO.chart-container,
+  #chartWeight.chart-container,
+  #chartMC.chart-container { height: auto; max-height: 40vh; }
+  .toggle { float: right; font-size: .9rem; padding: 6px 10px; }
+  .output p { margin: 6px 0; font-size: 1rem; }
+
+  @media (max-width: 480px) {
+    .chart-container { height: 180px; }
+    #chartIPO.chart-container,
+    #chartWeight.chart-container,
+    #chartMC.chart-container { height: auto; max-height: 35vh; }
+  }
+</style>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+<button class="toggle" id="toggleModeBtn">Toggle Theme</button>
+<h1>XOVR NAV Dashboard</h1>
+
+<div class="card">
+  <h2>Inputs</h2>
+
+  <label>SpaceX Weight (%)</label>
+  <div class="row">
+    <input id="weight" type="number" step="0.01" value="0.23">
+    <div style="width:160px"><input id="weightSlider" class="slider" type="range" min="0.05" max="0.40" step="0.01" value="0.23"></div>
+  </div>
+
+  <label>Last Private Valuation (B$) <span class="meta" id="lastValMax">max: 200</span></label>
+  <div class="row">
+    <input id="lastVal" type="number" value="100">
+    <div style="width:160px"><input id="lastValSlider" class="slider" type="range" min="50" max="200" step="1" value="100"></div>
+  </div>
+
+  <label>IPO Valuation (B$) <span class="meta" id="ipoValMax">max: 300</span></label>
+  <div class="row">
+    <input id="ipoVal" type="number" value="175">
+    <div style="width:160px"><input id="ipoValSlider" class="slider" type="range" min="50" max="300" step="1" value="175"></div>
+  </div>
+
+  <label>Current XOVR NAV</label>
+  <div class="row">
+    <input id="nav" type="number" value="20">
+    <div style="width:160px"><input id="navSlider" class="slider" type="range" min="5" max="50" step="1" value="20"></div>
+  </div>
+
+  <label>Partial Mark Already Reflected (%)</label>
+  <div class="row">
+    <input id="partial" type="number" step="0.01" value="0.30">
+    <div style="width:160px"><input id="partialSlider" class="slider" type="range" min="0" max="1" step="0.01" value="0.30"></div>
+  </div>
+
+  <button id="recalcBtn">Recalculate</button>
+
+  <h2>Scenarios</h2>
+  <button id="baseBtn">Base</button>
+  <button id="bullBtn">Bull</button>
+  <button id="bearBtn">Bear</button>
+</div>
+
+<div class="card output">
+  <h2>Outputs</h2>
+  <p>Repricing %: <span id="repricing"></span></p>
+  <p>Remaining Repricing %: <span id="remaining"></span></p>
+  <p>NAV Impact %: <span id="impact"></span></p>
+  <p>New NAV: <span id="newnav"></span></p>
+
+  <h2>Monte Carlo</h2>
+  <p>5th Percentile NAV: <span id="p5"></span></p>
+  <p>Median NAV: <span id="p50"></span></p>
+  <p>95th Percentile NAV: <span id="p95"></span></p>
+
+  <button id="mcBtn">Run Monte Carlo</button>
+</div>
+
+<div class="card">
+  <h2>New NAV vs IPO Valuation</h2>
+  <canvas id="chartIPO" class="chart-container"></canvas>
+</div>
+
+<div class="card">
+  <h2>New NAV vs SpaceX Weight</h2>
+  <canvas id="chartWeight" class="chart-container"></canvas>
+</div>
+
+<div class="card">
+  <h2>Monte Carlo Distribution</h2>
+  <canvas id="chartMC" class="chart-container"></canvas>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  // Hard cap (in B$) — $5T = 5000 B$
+  const HARD_MAX = 5000;
+
+  // Elements
+  const toggleModeBtn = document.getElementById('toggleModeBtn');
+
+  const weight = document.getElementById('weight');
+  const weightSlider = document.getElementById('weightSlider');
+
+  const lastVal = document.getElementById('lastVal');
+  const lastValSlider = document.getElementById('lastValSlider');
+  const lastValMaxSpan = document.getElementById('lastValMax');
+
+  const ipoVal = document.getElementById('ipoVal');
+  const ipoValSlider = document.getElementById('ipoValSlider');
+  const ipoValMaxSpan = document.getElementById('ipoValMax');
+
+  const nav = document.getElementById('nav');
+  const navSlider = document.getElementById('navSlider');
+
+  const partial = document.getElementById('partial');
+  const partialSlider = document.getElementById('partialSlider');
+
+  const recalcBtn = document.getElementById('recalcBtn');
+  const baseBtn = document.getElementById('baseBtn');
+  const bullBtn = document.getElementById('bullBtn');
+  const bearBtn = document.getElementById('bearBtn');
+
+  const repricingEl = document.getElementById('repricing');
+  const remainingEl = document.getElementById('remaining');
+  const impactEl = document.getElementById('impact');
+  const newnavEl = document.getElementById('newnav');
+
+  const p5 = document.getElementById('p5');
+  const p50 = document.getElementById('p50');
+  const p95 = document.getElementById('p95');
+
+  let chartIPO = null, chartWeight = null, chartMC = null;
+
+  // Helpers
+  function toNum(el) {
+    const v = parseFloat(el.value);
+    return Number.isFinite(v) ? v : 0;
+  }
+
+  function formatMaxLabel(val) {
+    // Show $5T when capped, otherwise show value in B$
+    return val === HARD_MAX ? '$5T' : val.toLocaleString() + ' B$';
+  }
+
+  // Dynamic slider range logic with hard cap and visible max
+  function updateSliderRanges() {
+    const last = toNum(lastVal);
+    const ipo = toNum(ipoVal);
+
+    const defaultLastMax = 200;
+    const defaultIpoMax = 300;
+
+    // Expand to twice current value but never exceed HARD_MAX
+    const newLastMax = Math.min(HARD_MAX, Math.max(defaultLastMax, Math.ceil(last * 2)));
+    const newIpoMax = Math.min(HARD_MAX, Math.max(defaultIpoMax, Math.ceil(ipo * 2)));
+
+    lastValSlider.max = newLastMax;
+    ipoValSlider.max = newIpoMax;
+
+    // Update visible max indicators
+    lastValMaxSpan.innerText = 'max: ' + formatMaxLabel(newLastMax);
+    ipoValMaxSpan.innerText = 'max: ' + formatMaxLabel(newIpoMax);
+
+    // Clamp slider values if they exceed new max
+    if (parseFloat(lastValSlider.value) > newLastMax) lastValSlider.value = newLastMax;
+    if (parseFloat(ipoValSlider.value) > newIpoMax) ipoValSlider.value = newIpoMax;
+  }
+
+  function syncFromInput(inputEl, sliderEl) {
+    let val = parseFloat(inputEl.value);
+    if (!Number.isFinite(val)) return;
+
+    // If user typed above HARD_MAX, clamp to HARD_MAX and reflect back
+    if (val > HARD_MAX) {
+      val = HARD_MAX;
+      inputEl.value = HARD_MAX;
+    }
+
+    // If typed value is greater than current slider max, expand the slider up to HARD_MAX
+    if (val > parseFloat(sliderEl.max)) {
+      sliderEl.max = Math.min(HARD_MAX, Math.ceil(val * 2));
+    }
+
+    sliderEl.value = inputEl.value;
+    updateSliderRanges();
+    calculate();
+  }
+
+  function syncFromSlider(sliderEl, inputEl) {
+    inputEl.value = sliderEl.value;
+    calculate();
+  }
+
+  // Wire inputs and sliders
+  weight.addEventListener('input', () => syncFromInput(weight, weightSlider));
+  lastVal.addEventListener('input', () => syncFromInput(lastVal, lastValSlider));
+  ipoVal.addEventListener('input', () => syncFromInput(ipoVal, ipoValSlider));
+  nav.addEventListener('input', () => syncFromInput(nav, navSlider));
+  partial.addEventListener('input', () => syncFromInput(partial, partialSlider));
+
+  // Also listen for change/blur (helps on mobile keyboards where input isn't committed until blur)
+  lastVal.addEventListener('change', () => syncFromInput(lastVal, lastValSlider));
+  lastVal.addEventListener('blur', () => syncFromInput(lastVal, lastValSlider));
+  ipoVal.addEventListener('change', () => syncFromInput(ipoVal, ipoValSlider));
+  ipoVal.addEventListener('blur', () => syncFromInput(ipoVal, ipoValSlider));
+
+  weightSlider.addEventListener('input', () => syncFromSlider(weightSlider, weight));
+  lastValSlider.addEventListener('input', () => syncFromSlider(lastValSlider, lastVal));
+  ipoValSlider.addEventListener('input', () => syncFromSlider(ipoValSlider, ipoVal));
+  navSlider.addEventListener('input', () => syncFromSlider(navSlider, nav));
+  partialSlider.addEventListener('input', () => syncFromSlider(partialSlider, partial));
+
+  // Recalculate should refresh slider ranges first
+  recalcBtn.addEventListener('click', () => { updateSliderRanges(); calculate(); });
+
+  // Calculate function
+  function calculate() {
+    const w = toNum(weight);
+    const last = toNum(lastVal);
+    const ipo = toNum(ipoVal);
+    const nav0 = toNum(nav);
+    const partialMark = toNum(partial);
+
+    let repricing = 0;
+    if (last > 0) repricing = (ipo - last) / last;
+    const remaining = repricing * (1 - partialMark);
+    const impact = w * remaining;
+    const newnav = nav0 * (1 + impact);
+
+    repricingEl.innerText = (repricing * 100).toFixed(02) + "%";
+    remainingEl.innerText = (remaining * 100).toFixed(02) + "%";
+    impactEl.innerText = (impact * 100).toFixed(02) + "%";
+    newnavEl.innerText = newnav.toFixed(2);
+
+    updateCharts();
+  }
+
+  // Scenarios
+  baseBtn.addEventListener('click', () => {
+    weight.value = 0.23; weightSlider.value = 0.23;
+    lastVal.value = 100; lastValSlider.value = 100;
+    ipoVal.value = 175; ipoValSlider.value = 175;
+    partial.value = 0.30; partialSlider.value = 0.30;
+    updateSliderRanges();
+    calculate();
+  });
+  bullBtn.addEventListener('click', () => {
+    weight.value = 0.25; weightSlider.value = 0.25;
+    lastVal.value = 95; lastValSlider.value = 95;
+    ipoVal.value = 200; ipoValSlider.value = 200;
+    partial.value = 0.10; partialSlider.value = 0.10;
+    updateSliderRanges();
+    calculate();
+  });
+  bearBtn.addEventListener('click', () => {
+    weight.value = 0.20; weightSlider.value = 0.20;
+    lastVal.value = 105; lastValSlider.value = 105;
+    ipoVal.value = 150; ipoValSlider.value = 150;
+    partial.value = 0.50; partialSlider.value = 0.50;
+    updateSliderRanges();
+    calculate();
+  });
+
+  
+  // Charts
+  function updateCharts() {
+    const last = toNum(lastVal), nav0 = toNum(nav);
+    const ipoVals = [100,125,150,175,200];
+    const newNavsIPO = ipoVals.map(v => {
+      const repr = last > 0 ? (v - last) / last : 0;
+      const rem = repr * (1 - toNum(partial));
+      const imp = toNum(weight) * rem;
+      return +(nav0 * (1 + imp)).toFixed(3);
+    });
+
+    if (chartIPO) chartIPO.destroy();
+    chartIPO = new Chart(document.getElementById("chartIPO"), {
+      type: 'line',
+      data: { labels: ipoVals, datasets: [{ label: "New NAV", data: newNavsIPO, borderColor: "#4fc3f7", borderWidth: 3, fill: false }] },
+      options: { responsive: true, maintainAspectRatio: true, aspectRatio: 2.5 }
+    });
+
+    const weights = [0.10,0.15,0.20,0.23,0.25,0.30];
+    const repr = last > 0 ? (toNum(ipoVal) - last) / last : 0;
+    const rem = repr * (1 - toNum(partial));
+    const newNavsW = weights.map(w => +(nav0 * (1 + w * rem)).toFixed(3));
+
+    if (chartWeight) chartWeight.destroy();
+    chartWeight = new Chart(document.getElementById("chartWeight"), {
+      type: 'line',
+      data: { labels: weights.map(w=> (w*100).toFixed(0) + "%"), datasets: [{ label: "New NAV", data: newNavsW, borderColor: "#81c784", borderWidth: 3, fill: false }] },
+      options: { responsive: true, maintainAspectRatio: true, aspectRatio: 2.5 }
+    });
+  }
+
+  // Monte Carlo
+  function randomNormal(mean, sd) {
+    const u = Math.random(), v = Math.random();
+    return mean + Math.sqrt(-2*Math.log(u)) * Math.cos(2*Math.PI*v) * sd;
+  }
+
+  document.getElementById('mcBtn').addEventListener('click', () => {
+    const trials = 1500;
+    const results = [];
+    const sdIpo = 20, sdLast = 10;
+    for (let i=0;i<trials;i++){
+      const ipo = randomNormal(toNum(ipoVal), sdIpo);
+      const last = Math.max(0.0001, randomNormal(toNum(lastVal), sdLast));
+      const repr = (ipo - last) / last;
+      const rem = repr * (1 - toNum(partial));
+      const imp = toNum(weight) * rem;
+      const newnav = toNum(nav) * (1 + imp);
+      results.push(newnav);
+    }
+    results.sort((a,b)=>a-b);
+    const idx = n => Math.max(0, Math.min(trials-1, Math.floor(n*trials)));
+    p5.innerText = results[idx(0.05)].toFixed(02);
+    p50.innerText = results[idx(0.50)].toFixed(02);
+    p95.innerText = results[idx(0.95)].toFixed(02);
+
+    if (chartMC) chartMC.destroy();
+    chartMC = new Chart(document.getElementById("chartMC"), {
+      type: 'bar',
+      data: { labels: results.slice(0,200).map((_,i)=>i+1), datasets: [{ label: "NAV Distribution (sample)", data: results.slice(0,200), backgroundColor: "#4fc3f7" }] },
+      options: { responsive: true, maintainAspectRatio: true, aspectRatio: 3 }
+    });
+  });
+
+  // Theme toggle
+  toggleModeBtn.addEventListener('click', ()=>document.body.classList.toggle('light'));
+
+  // initial compute + init sliders range
+  updateSliderRanges();
+  calculate();
+});
+</script>
+</body>
+</html>

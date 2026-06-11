@@ -74,14 +74,16 @@
 
   <label>Last Private Valuation (B$) <span class="meta" id="lastValMax">max: 200</span></label>
   <div class="row">
-    <input id="lastVal" type="number" value="100">
-    <div style="width:160px"><input id="lastValSlider" class="slider" type="range" min="50" max="200" step="1" value="100"></div>
+    <!-- default value set to 800 B$ -->
+    <input id="lastVal" type="number" value="800">
+    <div style="width:160px"><input id="lastValSlider" class="slider" type="range" min="50" max="5000" step="1" value="800"></div>
   </div>
 
   <label>IPO Valuation (B$) <span class="meta" id="ipoValMax">max: 300</span></label>
   <div class="row">
-    <input id="ipoVal" type="number" value="175">
-    <div style="width:160px"><input id="ipoValSlider" class="slider" type="range" min="50" max="300" step="1" value="175"></div>
+    <!-- default value set to 1750 B$ (1.75T) -->
+    <input id="ipoVal" type="number" value="1750">
+    <div style="width:160px"><input id="ipoValSlider" class="slider" type="range" min="50" max="5000" step="1" value="1750"></div>
   </div>
 
   <label>Current XOVR NAV</label>
@@ -139,6 +141,9 @@ document.addEventListener('DOMContentLoaded', () => {
   // Hard cap (in B$) — $5T = 5000 B$
   const HARD_MAX = 5000;
 
+  // initialLoad flag: force sliders to show the cap on first render
+  let initialLoad = true;
+
   // Elements
   const toggleModeBtn = document.getElementById('toggleModeBtn');
 
@@ -194,9 +199,15 @@ document.addEventListener('DOMContentLoaded', () => {
     const defaultLastMax = 200;
     const defaultIpoMax = 300;
 
-    // Expand to twice current value but never exceed HARD_MAX
-    const newLastMax = Math.min(HARD_MAX, Math.max(defaultLastMax, Math.ceil(last * 2)));
-    const newIpoMax = Math.min(HARD_MAX, Math.max(defaultIpoMax, Math.ceil(ipo * 2)));
+    // On initial load, force both sliders to the hard cap so the labels show $5T
+    let newLastMax, newIpoMax;
+    if (initialLoad) {
+      newLastMax = HARD_MAX;
+      newIpoMax = HARD_MAX;
+    } else {
+      newLastMax = Math.min(HARD_MAX, Math.max(defaultLastMax, Math.ceil(last * 2)));
+      newIpoMax = Math.min(HARD_MAX, Math.max(defaultIpoMax, Math.ceil(ipo * 2)));
+    }
 
     lastValSlider.max = newLastMax;
     ipoValSlider.max = newIpoMax;
@@ -271,9 +282,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const impact = w * remaining;
     const newnav = nav0 * (1 + impact);
 
-    repricingEl.innerText = (repricing * 100).toFixed(02) + "%";
-    remainingEl.innerText = (remaining * 100).toFixed(02) + "%";
-    impactEl.innerText = (impact * 100).toFixed(02) + "%";
+    repricingEl.innerText = (repricing * 100).toFixed(2) + "%";
+    remainingEl.innerText = (remaining * 100).toFixed(2) + "%";
+    impactEl.innerText = (impact * 100).toFixed(2) + "%";
     newnavEl.innerText = newnav.toFixed(2);
 
     updateCharts();
@@ -376,6 +387,9 @@ document.addEventListener('DOMContentLoaded', () => {
   // initial compute + init sliders range
   updateSliderRanges();
   calculate();
+
+  // After first render, stop forcing the cap behavior
+  initialLoad = false;
 });
 </script>
 </body>

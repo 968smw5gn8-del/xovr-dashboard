@@ -35,9 +35,11 @@
   body { background: var(--bg); color: var(--text); font-family: -apple-system,BlinkMacSystemFont,Arial; margin: 12px; transition: background .3s,color .3s; }
   h1,h2 { color: var(--accent); margin-bottom: 12px; font-size: 1.4rem; }
   .card { background: var(--card); padding: 16px; border-radius: 12px; margin-bottom: 16px; transition: background .3s; }
-  label { font-size: .9rem; }
-  input[type=number] { width: 100%; padding: 10px; background: var(--input-bg); border: 1px solid var(--input-border); border-radius: 6px; color: var(--text); margin-bottom: 14px; font-size: 1rem; }
-  .slider { width: 100%; margin: 6px 0 18px 0; }
+  label { font-size: .9rem; display: block; margin-bottom: 6px; }
+  .row { display:flex; align-items:center; gap:12px; }
+  .row .meta { font-size:0.85rem; color:var(--text); opacity:0.8; margin-left:auto; }
+  input[type=number] { width: 100%; padding: 10px; background: var(--input-bg); border: 1px solid var(--input-border); border-radius: 6px; color: var(--text); margin-bottom: 8px; font-size: 1rem; }
+  .slider { width: 100%; margin: 6px 0 14px 0; }
   button { background: var(--accent); color: #000; padding: 10px 14px; border: none; border-radius: 6px; font-size: 1rem; margin-right: 8px; margin-top: 6px; }
   .chart-container { width: 100%; height: 260px; }
   /* Make specific charts more responsive on narrow screens */
@@ -65,24 +67,34 @@
   <h2>Inputs</h2>
 
   <label>SpaceX Weight (%)</label>
-  <input id="weight" type="number" step="0.01" value="0.23">
-  <input id="weightSlider" class="slider" type="range" min="0.05" max="0.40" step="0.01" value="0.23">
+  <div class="row">
+    <input id="weight" type="number" step="0.01" value="0.23">
+    <div style="width:160px"><input id="weightSlider" class="slider" type="range" min="0.05" max="0.40" step="0.01" value="0.23"></div>
+  </div>
 
-  <label>Last Private Valuation (B$)</label>
-  <input id="lastVal" type="number" value="100">
-  <input id="lastValSlider" class="slider" type="range" min="50" max="200" step="1" value="100">
+  <label>Last Private Valuation (B$) <span class="meta" id="lastValMax">max: 200</span></label>
+  <div class="row">
+    <input id="lastVal" type="number" value="100">
+    <div style="width:160px"><input id="lastValSlider" class="slider" type="range" min="50" max="200" step="1" value="100"></div>
+  </div>
 
-  <label>IPO Valuation (B$)</label>
-  <input id="ipoVal" type="number" value="175">
-  <input id="ipoValSlider" class="slider" type="range" min="50" max="300" step="1" value="175">
+  <label>IPO Valuation (B$) <span class="meta" id="ipoValMax">max: 300</span></label>
+  <div class="row">
+    <input id="ipoVal" type="number" value="175">
+    <div style="width:160px"><input id="ipoValSlider" class="slider" type="range" min="50" max="300" step="1" value="175"></div>
+  </div>
 
   <label>Current XOVR NAV</label>
-  <input id="nav" type="number" value="20">
-  <input id="navSlider" class="slider" type="range" min="5" max="50" step="1" value="20">
+  <div class="row">
+    <input id="nav" type="number" value="20">
+    <div style="width:160px"><input id="navSlider" class="slider" type="range" min="5" max="50" step="1" value="20"></div>
+  </div>
 
   <label>Partial Mark Already Reflected (%)</label>
-  <input id="partial" type="number" step="0.01" value="0.30">
-  <input id="partialSlider" class="slider" type="range" min="0" max="1" step="0.01" value="0.30">
+  <div class="row">
+    <input id="partial" type="number" step="0.01" value="0.30">
+    <div style="width:160px"><input id="partialSlider" class="slider" type="range" min="0" max="1" step="0.01" value="0.30"></div>
+  </div>
 
   <button id="recalcBtn">Recalculate</button>
 
@@ -124,6 +136,9 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', () => {
+  // Hard cap (in B$) — $5T = 5000 B$
+  const HARD_MAX = 5000;
+
   // Elements
   const toggleModeBtn = document.getElementById('toggleModeBtn');
 
@@ -132,9 +147,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const lastVal = document.getElementById('lastVal');
   const lastValSlider = document.getElementById('lastValSlider');
+  const lastValMaxSpan = document.getElementById('lastValMax');
 
   const ipoVal = document.getElementById('ipoVal');
   const ipoValSlider = document.getElementById('ipoValSlider');
+  const ipoValMaxSpan = document.getElementById('ipoValMax');
 
   const nav = document.getElementById('nav');
   const navSlider = document.getElementById('navSlider');
@@ -164,36 +181,46 @@ document.addEventListener('DOMContentLoaded', () => {
     return Number.isFinite(v) ? v : 0;
   }
 
-  // Dynamic slider range logic
+  // Dynamic slider range logic with hard cap and visible max
   function updateSliderRanges() {
-    // Ensure sliders can cover typed numeric values and provide headroom
     const last = toNum(lastVal);
     const ipo = toNum(ipoVal);
 
-    // Strategy: slider max = max(default, ceil(currentValue * 2))
     const defaultLastMax = 200;
     const defaultIpoMax = 300;
 
-    const newLastMax = Math.max(defaultLastMax, Math.ceil(last * 2));
-    const newIpoMax = Math.max(defaultIpoMax, Math.ceil(ipo * 2));
+    // Expand to twice current value but never exceed HARD_MAX
+    const newLastMax = Math.min(HARD_MAX, Math.max(defaultLastMax, Math.ceil(last * 2)));
+    const newIpoMax = Math.min(HARD_MAX, Math.max(defaultIpoMax, Math.ceil(ipo * 2)));
 
     lastValSlider.max = newLastMax;
     ipoValSlider.max = newIpoMax;
 
-    // If current slider values exceed new max, clamp them
+    // Update visible max indicators
+    lastValMaxSpan.innerText = 'max: ' + newLastMax.toLocaleString();
+    ipoValMaxSpan.innerText = 'max: ' + newIpoMax.toLocaleString();
+
+    // Clamp slider values if they exceed new max
     if (parseFloat(lastValSlider.value) > newLastMax) lastValSlider.value = newLastMax;
     if (parseFloat(ipoValSlider.value) > newIpoMax) ipoValSlider.value = newIpoMax;
   }
 
   function syncFromInput(inputEl, sliderEl) {
-    const val = parseFloat(inputEl.value);
-    if (Number.isFinite(val)) {
-      // if typed value exceeds slider max, expand the slider max with some headroom
-      if (val > parseFloat(sliderEl.max)) {
-        sliderEl.max = Math.ceil(val * 2);
-      }
-      sliderEl.value = inputEl.value;
+    let val = parseFloat(inputEl.value);
+    if (!Number.isFinite(val)) return;
+
+    // If user typed above HARD_MAX, clamp to HARD_MAX and reflect back
+    if (val > HARD_MAX) {
+      val = HARD_MAX;
+      inputEl.value = HARD_MAX;
     }
+
+    // If typed value is greater than current slider max, expand the slider up to HARD_MAX
+    if (val > parseFloat(sliderEl.max)) {
+      sliderEl.max = Math.min(HARD_MAX, Math.ceil(val * 2));
+    }
+
+    sliderEl.value = inputEl.value;
     updateSliderRanges();
     calculate();
   }

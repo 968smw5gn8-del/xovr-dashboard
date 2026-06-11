@@ -290,28 +290,79 @@ document.addEventListener('DOMContentLoaded', () => {
     updateCharts();
   }
 
-  // Scenarios
+  // Scenarios — updated behavior:
+  // Base: reset to defaults (800 / 1750)
+  // Bull/Bear: apply relative adjustments to current inputs
   baseBtn.addEventListener('click', () => {
-    weight.value = 0.23; weightSlider.value = 0.23;
-    lastVal.value = 100; lastValSlider.value = 100;
-    ipoVal.value = 175; ipoValSlider.value = 175;
-    partial.value = 0.30; partialSlider.value = 0.30;
+    // Reset to chosen defaults
+    const defaultWeight = 0.23;
+    const defaultLast = 800;    // B$
+    const defaultIpo = 1750;    // B$ (1.75T)
+    const defaultPartial = 0.30;
+
+    weight.value = defaultWeight; weightSlider.value = defaultWeight;
+    lastVal.value = defaultLast; lastValSlider.value = defaultLast;
+    ipoVal.value = defaultIpo; ipoValSlider.value = defaultIpo;
+    partial.value = defaultPartial; partialSlider.value = defaultPartial;
+
     updateSliderRanges();
     calculate();
   });
+
   bullBtn.addEventListener('click', () => {
-    weight.value = 0.25; weightSlider.value = 0.25;
-    lastVal.value = 95; lastValSlider.value = 95;
-    ipoVal.value = 200; ipoValSlider.value = 200;
-    partial.value = 0.10; partialSlider.value = 0.10;
+    // Weight +0.02 (cap to slider max)
+    const wNew = Math.min(parseFloat(weightSlider.max), Number((toNum(weight) + 0.02).toFixed(2)));
+    weight.value = wNew; weightSlider.value = wNew;
+
+    // Last -5%
+    let lastNew = Math.round(toNum(lastVal) * 0.95);
+    lastNew = Math.max(0, Math.min(HARD_MAX, lastNew));
+    lastVal.value = lastNew;
+
+    // IPO +15%
+    let ipoNew = Math.round(toNum(ipoVal) * 1.15);
+    ipoNew = Math.max(0, Math.min(HARD_MAX, ipoNew));
+    ipoVal.value = ipoNew;
+
+    // Partial -0.20
+    const partNew = Math.max(0, Math.min(1, +(toNum(partial) - 0.20).toFixed(2)));
+    partial.value = partNew;
+
+    // Sync and refresh
+    syncFromInput(weight, weightSlider);
+    syncFromInput(lastVal, lastValSlider);
+    syncFromInput(ipoVal, ipoValSlider);
+    syncFromInput(partial, partialSlider);
+
     updateSliderRanges();
     calculate();
   });
+
   bearBtn.addEventListener('click', () => {
-    weight.value = 0.20; weightSlider.value = 0.20;
-    lastVal.value = 105; lastValSlider.value = 105;
-    ipoVal.value = 150; ipoValSlider.value = 150;
-    partial.value = 0.50; partialSlider.value = 0.50;
+    // Weight -0.03 (min to slider min)
+    const wNew = Math.max(parseFloat(weightSlider.min), Number((toNum(weight) - 0.03).toFixed(2)));
+    weight.value = wNew; weightSlider.value = wNew;
+
+    // Last +5%
+    let lastNew = Math.round(toNum(lastVal) * 1.05);
+    lastNew = Math.max(0, Math.min(HARD_MAX, lastNew));
+    lastVal.value = lastNew;
+
+    // IPO -15%
+    let ipoNew = Math.round(toNum(ipoVal) * 0.85);
+    ipoNew = Math.max(0, Math.min(HARD_MAX, ipoNew));
+    ipoVal.value = ipoNew;
+
+    // Partial +0.20
+    const partNew = Math.max(0, Math.min(1, +(toNum(partial) + 0.20).toFixed(2)));
+    partial.value = partNew;
+
+    // Sync and refresh
+    syncFromInput(weight, weightSlider);
+    syncFromInput(lastVal, lastValSlider);
+    syncFromInput(ipoVal, ipoValSlider);
+    syncFromInput(partial, partialSlider);
+
     updateSliderRanges();
     calculate();
   });
@@ -369,7 +420,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     results.sort((a,b)=>a-b);
     const idx = n => Math.max(0, Math.min(trials-1, Math.floor(n*trials)));
-    p5.innerText = results[idx(0.05)].toFixed(02);
+    p5.innerText = results[idx(0.05)].toFixed(2);
     p50.innerText = results[idx(0.50)].toFixed(02);
     p95.innerText = results[idx(0.95)].toFixed(02);
 

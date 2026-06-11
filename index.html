@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
+<title>XOVR NAV Dashboard</title>
+
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#121212">
+
+<script>
+  if ("serviceWorker" in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register("service-worker.js").catch(()=>{/*fail quietly*/});
+    });
+  }
+</script>
+
+<style>
+  :root {
+    --bg: #121212;
+    --card: #1e1e1e;
+    --text: #e0e0e0;
+    --accent: #4fc3f7;
+    --input-bg: #2a2a2a;
+    --input-border: #444;
+  }
+  .light {
+    --bg: #f5f5f5;
+    --card: #ffffff;
+    --text: #222;
+    --accent: #007aff;
+    --input-bg: #fafafa;
+    --input-border: #ccc;
+  }
+  body { background: var(--bg); color: var(--text); font-family: -apple-system,BlinkMacSystemFont,Arial; margin: 12px; transition: background .3s,color .3s; }
+  h1,h2 { color: var(--accent); margin-bottom: 12px; font-size: 1.4rem; }
+  .card { background: var(--card); padding: 16px; border-radius: 12px; margin-bottom: 16px; transition: background .3s; }
+  label { font-size: .9rem; }
+  input[type=number] { width: 100%; padding: 10px; background: var(--input-bg); border: 1px solid var(--input-border); border-radius: 6px; color: var(--text); margin-bottom: 14px; font-size: 1rem; }
+  .slider { width: 100%; margin: 6px 0 18px 0; }
+  button { background: var(--accent); color: #000; padding: 10px 14px; border: none; border-radius: 6px; font-size: 1rem; margin-right: 8px; margin-top: 6px; }
+  .chart-container { width: 100%; height: 260px; }
+  .toggle { float: right; font-size: .9rem; padding: 6px 10px; }
+  .output p { margin: 6px 0; font-size: 1rem; }
+</style>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+<button class="toggle" id="toggleModeBtn">Toggle Theme</button>
+<h1>XOVR NAV Dashboard</h1>
+
+<div class="card">
+  <h2>Inputs</h2>
+
+  <label>SpaceX Weight (%)</label>
+  <input id="weight" type="number" step="0.01" value="0.23">
+  <input id="weightSlider" class="slider" type="range" min="0.05" max="0.40" step="0.01" value="0.23">
+
+  <label>Last Private Valuation (B$)</label>
+  <input id="lastVal" type="number" value="100">
+  <input id="lastValSlider" class="slider" type="range" min="50" max="200" step="1" value="100">
+
+  <label>IPO Valuation (B$)</label>
+  <input id="ipoVal" type="number" value="175">
+  <input id="ipoValSlider" class="slider" type="range" min="50" max="300" step="1" value="175">
+
+  <label>Current XOVR NAV</label>
+  <input id="nav" type="number" value="20">
+  <input id="navSlider" class="slider" type="range" min="5" max="50" step="1" value="20">
+
+  <label>Partial Mark Already Reflected (%)</label>
+  <input id="partial" type="number" step="0.01" value="0.30">
+  <input id="partialSlider" class="slider" type="range" min="0" max="1" step="0.01" value="0.30">
+
+  <button id="recalcBtn">Recalculate</button>
+
+  <h2>Scenarios</h2>
+  <button id="baseBtn">Base</button>
+  <button id="bullBtn">Bull</button>
+  <button id="bearBtn">Bear</button>
+</div>
+
+<div class="card output">
+  <h2>Outputs</h2>
+  <p>Repricing %: <span id="repricing"></span></p>
+  <p>Remaining Repricing %: <span id="remaining"></span></p>
+  <p>NAV Impact %: <span id="impact"></span></p>
+  <p>New NAV: <span id="newnav"></span></p>
+
+  <h2>Monte Carlo</h2>
+  <p>5th Percentile NAV: <span id="p5"></span></p>
+  <p>Median NAV: <span id="p50"></span></p>
+  <p>95th Percentile NAV: <span id="p95"></span></p>
+
+  <button id="mcBtn">Run Monte Carlo</button>
+</div>
+
+<div class="card">
+  <h2>New NAV vs IPO Valuation</h2>
+  <canvas id="chartIPO" class="chart-container"></canvas>
+</div>
+
+<div class="card">
+  <h2>New NAV vs SpaceX Weight</h2>
+  <canvas id="chartWeight" class="chart-container"></canvas>
+</div>
+
+<div class="card">
+  <h2>Monte Carlo Distribution</h2>
+  <canvas id="chartMC" class="chart-container"></canvas>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  // Elements
+  const toggleModeBtn = document.getElementById('toggleModeBtn');
+
+  const weight = document.getElementById('weight');
+  const weightSlider = document.getElementById('weightSlider');
+
+  const lastVal = document.getElementById('lastVal');
+  const lastValSlider = document.getElementById('lastValSlider');
+
+  const ipoVal = document.getElementById('ipoVal');
+  const ipoValSlider = document.getElementById('ipoValSlider');
+
+  const nav = document.getElementById('nav');
+  const navSlider = document.getElementById('navSlider');
+
+  const partial = document.getElementById('partial');
+  const partialSlider = document.getElementById('partialSlider');
+
+  const recalcBtn = document.getElementById('recalcBtn');
+  const baseBtn = document.getElementById('baseBtn');
+  const bullBtn = document.getElementById('bullBtn');
+  const bearBtn = document.getElementById('bearBtn');
+
+  const repricingEl = document.getElementById('repricing');
+  const remainingEl = document.getElementById('remaining');
+  const impactEl = document.getElementById('impact');
+  const newnavEl = document.getElementById('newnav');
+
+  const p5 = document.getElementById('p5');
+  const p50 = document.getElementById('p50');
+  const p95 = document.getElementById('p95');
+
+  let chartIPO = null, chartWeight = null, chartMC = null;
+
+  // Helpers
+  function toNum(el) {
+    const v = parseFloat(el.value);
+    return Number.isFinite(v) ? v : 0;
+  }
+
+  function syncFromInput(inputEl, sliderEl) {
+    sliderEl.value = inputEl.value;
+    calculate();
+  }
+
+  function syncFromSlider(sliderEl, inputEl) {
+    inputEl.value = sliderEl.value;
+    calculate();
+  }
+
+  // Wire inputs and sliders
+  weight.addEventListener('input', () => syncFromInput(weight, weightSlider));
+  lastVal.addEventListener('input', () => syncFromInput(lastVal, lastValSlider));
+  ipoVal.addEventListener('input', () => syncFromInput(ipoVal, ipoValSlider));
+  nav.addEventListener('input', () => syncFromInput(nav, navSlider));
+  partial.addEventListener('input', () => syncFromInput(partial, partialSlider));
+
+  weightSlider.addEventListener('input', () => syncFromSlider(weightSlider, weight));
+  lastValSlider.addEventListener('input', () => syncFromSlider(lastValSlider, lastVal));
+  ipoValSlider.addEventListener('input', () => syncFromSlider(ipoValSlider, ipoVal));
+  navSlider.addEventListener('input', () => syncFromSlider(navSlider, nav));
+  partialSlider.addEventListener('input', () => syncFromSlider(partialSlider, partial));
+
+  // Calculate function
+  function calculate() {
+    const w = toNum(weight);
+    const last = toNum(lastVal);
+    const ipo = toNum(ipoVal);
+    const nav0 = toNum(nav);
+    const partialMark = toNum(partial);
+
+    let repricing = 0;
+    if (last > 0) repricing = (ipo - last) / last;
+    const remaining = repricing * (1 - partialMark);
+    const impact = w * remaining;
+    const newnav = nav0 * (1 + impact);
+
+    repricingEl.innerText = (repricing * 100).toFixed(2) + "%";
+    remainingEl.innerText = (remaining * 100).toFixed(02) + "%";
+    impactEl.innerText = (impact * 100).toFixed(02) + "%";
+    newnavEl.innerText = newnav.toFixed(2);
+
+    updateCharts();
+  }
+
+  // Scenarios
+  baseBtn.addEventListener('click', () => {
+    weight.value = 0.23; weightSlider.value = 0.23;
+    lastVal.value = 100; lastValSlider.value = 100;
+    ipoVal.value = 175; ipoValSlider.value = 175;
+    partial.value = 0.30; partialSlider.value = 0.30;
+    calculate();
+  });
+  bullBtn.addEventListener('click', () => {
+    weight.value = 0.25; weightSlider.value = 0.25;
+    lastVal.value = 95; lastValSlider.value = 95;
+    ipoVal.value = 200; ipoValSlider.value = 200;
+    partial.value = 0.10; partialSlider.value = 0.10;
+    calculate();
+  });
+  bearBtn.addEventListener('click', () => {
+    weight.value = 0.20; weightSlider.value = 0.20;
+    lastVal.value = 105; lastValSlider.value = 105;
+    ipoVal.value = 150; ipoValSlider.value = 150;
+    partial.value = 0.50; partialSlider.value = 0.50;
+    calculate();
+  });
+
+  recalcBtn.addEventListener('click', calculate);
+
+  // Charts
+  function updateCharts() {
+    const last = toNum(lastVal), nav0 = toNum(nav);
+    const ipoVals = [100,125,150,175,200];
+    const newNavsIPO = ipoVals.map(v => {
+      const repr = last > 0 ? (v - last) / last : 0;
+      const rem = repr * (1 - toNum(partial));
+      const imp = toNum(weight) * rem;
+      return +(nav0 * (1 + imp)).toFixed(3);
+    });
+
+    if (chartIPO) chartIPO.destroy();
+    chartIPO = new Chart(document.getElementById("chartIPO"), {
+      type: 'line',
+      data: { labels: ipoVals, datasets: [{ label: "New NAV", data: newNavsIPO, borderColor: "#4fc3f7", borderWidth: 3, fill: false }] },
+      options: { responsive: true, maintainAspectRatio: false }
+    });
+
+    const weights = [0.10,0.15,0.20,0.23,0.25,0.30];
+    const repr = last > 0 ? (toNum(ipoVal) - last) / last : 0;
+    const rem = repr * (1 - toNum(partial));
+    const newNavsW = weights.map(w => +(nav0 * (1 + w * rem)).toFixed(3));
+
+    if (chartWeight) chartWeight.destroy();
+    chartWeight = new Chart(document.getElementById("chartWeight"), {
+      type: 'line',
+      data: { labels: weights.map(w=> (w*100).toFixed(0) + "%"), datasets: [{ label: "New NAV", data: newNavsW, borderColor: "#81c784", borderWidth: 3, fill: false }] },
+      options: { responsive: true, maintainAspectRatio: false }
+    });
+  }
+
+  // Monte Carlo
+  function randomNormal(mean, sd) {
+    const u = Math.random(), v = Math.random();
+    return mean + Math.sqrt(-2*Math.log(u)) * Math.cos(2*Math.PI*v) * sd;
+  }
+
+  document.getElementById('mcBtn').addEventListener('click', () => {
+    const trials = 1500;
+    const results = [];
+    const sdIpo = 20, sdLast = 10;
+    for (let i=0;i<trials;i++){
+      const ipo = randomNormal(toNum(ipoVal), sdIpo);
+      const last = Math.max(0.0001, randomNormal(toNum(lastVal), sdLast));
+      const repr = (ipo - last) / last;
+      const rem = repr * (1 - toNum(partial));
+      const imp = toNum(weight) * rem;
+      const newnav = toNum(nav) * (1 + imp);
+      results.push(newnav);
+    }
+    results.sort((a,b)=>a-b);
+    const idx = n => Math.max(0, Math.min(trials-1, Math.floor(n*trials)));
+    p5.innerText = results[idx(0.05)].toFixed(2);
+    p50.innerText = results[idx(0.50)].toFixed(2);
+    p95.innerText = results[idx(0.95)].toFixed(2);
+
+    if (chartMC) chartMC.destroy();
+    chartMC = new Chart(document.getElementById("chartMC"), {
+      type: 'bar',
+      data: { labels: results.slice(0,200).map((_,i)=>i+1), datasets: [{ label: "NAV Distribution (sample)", data: results.slice(0,200), backgroundColor: "#4fc3f7" }] },
+      options: { responsive: true, maintainAspectRatio: false }
+    });
+  });
+
+  // Theme toggle
+  toggleModeBtn.addEventListener('click', ()=>document.body.classList.toggle('light'));
+
+  // initial compute
+  calculate();
+});
+</script>
+</body>
+</html>

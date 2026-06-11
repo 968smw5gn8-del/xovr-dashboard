@@ -181,6 +181,11 @@ document.addEventListener('DOMContentLoaded', () => {
     return Number.isFinite(v) ? v : 0;
   }
 
+  function formatMaxLabel(val) {
+    // Show $5T when capped, otherwise show value in B$
+    return val === HARD_MAX ? '$5T' : val.toLocaleString() + ' B$';
+  }
+
   // Dynamic slider range logic with hard cap and visible max
   function updateSliderRanges() {
     const last = toNum(lastVal);
@@ -197,8 +202,8 @@ document.addEventListener('DOMContentLoaded', () => {
     ipoValSlider.max = newIpoMax;
 
     // Update visible max indicators
-    lastValMaxSpan.innerText = 'max: ' + newLastMax.toLocaleString();
-    ipoValMaxSpan.innerText = 'max: ' + newIpoMax.toLocaleString();
+    lastValMaxSpan.innerText = 'max: ' + formatMaxLabel(newLastMax);
+    ipoValMaxSpan.innerText = 'max: ' + formatMaxLabel(newIpoMax);
 
     // Clamp slider values if they exceed new max
     if (parseFloat(lastValSlider.value) > newLastMax) lastValSlider.value = newLastMax;
@@ -345,9 +350,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     results.sort((a,b)=>a-b);
     const idx = n => Math.max(0, Math.min(trials-1, Math.floor(n*trials)));
-    p5.innerText = results[idx(0.05)].toFixed(2);
-    p50.innerText = results[idx(0.50)].toFixed(2);
-    p95.innerText = results[idx(0.95)].toFixed(2);
+    p5.innerText = results[idx(0.05)].toFixed(02);
+    p50.innerText = results[idx(0.50)].toFixed(02);
+    p95.innerText = results[idx(0.95)].toFixed(02);
 
     if (chartMC) chartMC.destroy();
     chartMC = new Chart(document.getElementById("chartMC"), {

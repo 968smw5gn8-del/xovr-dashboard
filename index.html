@@ -242,11 +242,20 @@ document.addEventListener('DOMContentLoaded', () => {
   nav.addEventListener('input', () => syncFromInput(nav, navSlider));
   partial.addEventListener('input', () => syncFromInput(partial, partialSlider));
 
+  // Also listen for change/blur (helps on mobile keyboards where input isn't committed until blur)
+  lastVal.addEventListener('change', () => syncFromInput(lastVal, lastValSlider));
+  lastVal.addEventListener('blur', () => syncFromInput(lastVal, lastValSlider));
+  ipoVal.addEventListener('change', () => syncFromInput(ipoVal, ipoValSlider));
+  ipoVal.addEventListener('blur', () => syncFromInput(ipoVal, ipoValSlider));
+
   weightSlider.addEventListener('input', () => syncFromSlider(weightSlider, weight));
   lastValSlider.addEventListener('input', () => syncFromSlider(lastValSlider, lastVal));
   ipoValSlider.addEventListener('input', () => syncFromSlider(ipoValSlider, ipoVal));
   navSlider.addEventListener('input', () => syncFromSlider(navSlider, nav));
   partialSlider.addEventListener('input', () => syncFromSlider(partialSlider, partial));
+
+  // Recalculate should refresh slider ranges first
+  recalcBtn.addEventListener('click', () => { updateSliderRanges(); calculate(); });
 
   // Calculate function
   function calculate() {
@@ -296,8 +305,7 @@ document.addEventListener('DOMContentLoaded', () => {
     calculate();
   });
 
-  recalcBtn.addEventListener('click', calculate);
-
+  
   // Charts
   function updateCharts() {
     const last = toNum(lastVal), nav0 = toNum(nav);

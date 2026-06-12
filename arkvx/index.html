@@ -224,7 +224,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
       totalImpact += imp;
     });
     const newNav = nav0*(1+totalImpact);
-    totalImpactEl.innerText = (totalImpact*100).toFixed(2) + '%';
+    totalImpactEl.innerText = (totalImpact*100).toFixed(02) + '%';
     totalNewNavEl.innerText = newNav.toFixed(2);
     updateCharts(contributions);
   }
@@ -245,10 +245,25 @@ document.addEventListener('DOMContentLoaded', ()=>{
   // Theme toggle
   document.getElementById('toggleMode').addEventListener('click', ()=>document.body.classList.toggle('light'));
 
-  // Initial setup
-  updateSliderRanges();
-  calculate();
-  initialLoad=false;
+  // Initial setup — try to fetch arkvx/nav.json to set default NAV
+  async function init(){
+    try{
+      const resp = await fetch('nav.json', {cache: 'no-store'});
+      if (resp.ok){
+        const j = await resp.json();
+        if (j && typeof j.nav === 'number'){
+          nav.value = j.nav;
+          navS.value = j.nav;
+        }
+      }
+    }catch(e){/*ignore*/}
+
+    updateSliderRanges();
+    calculate();
+    initialLoad = false;
+  }
+
+  init();
 });
 </script>
 </body>

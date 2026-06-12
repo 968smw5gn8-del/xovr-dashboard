@@ -1,0 +1,52 @@
+name: Update ARKVX NAV
+
+on:
+  schedule:
+    - cron: '0 8 * * *'  # daily at 08:00 UTC
+  workflow_dispatch: {}
+
+jobs:
+  update-nav:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+
+      - name: Install jq
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq
+
+      - name: Fetch ARKVX quote from Yahoo Finance
+        run: |
+          URL="https://query1.finance.yahoo.com/v7/finance/quote?symbols=ARKVX"
+          echo "Fetching $URL"
+          curl -s "$URL" -o /tmp/arkvx_quote.json
+          PRICE=$(jq -r '.quoteResponse.result[0].regularMarketPrice // .quoteResponse.result[0].preMarketPrice // .quoteResponse.result[0].postMarketPrice // empty' /tmp/arkvx_quote.json)
+          echo "Price from Yahoo: $PRICE"
+          if [ -z "$PRICE" ] || [ "$PRICE" = "null" ]; then
+            echo "No price found, exiting"
+            exit 0
+          fi
+          TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          mkdir -p arkvx
+          cat > arkvx/nav.json <<EOF
+{
+  "nav": $PRICE,
+  "fetched_at": "$TIMESTAMP",
+  "source": "$URL"
+}
+EOF
+          ls -l arkvx/nav.json
+          cat arkvx/nav.json
+
+      - name: Commit nav.json
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add arkvx/nav.json
+          # Only commit if there are changes
+          git diff --staged --quiet || git commit -m "Update ARKVX NAV from Yahoo Finance"
+          git push

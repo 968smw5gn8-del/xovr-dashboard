@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
+<title>ARKVX NAV Dashboard</title>
+<meta name="theme-color" content="#121212">
+<style>
+  :root{--bg:#121212;--card:#1e1e1e;--text:#e0e0e0;--accent:#4fc3f7;--input-bg:#2a2a2a;--input-border:#444}
+  .light{--bg:#f5f5f5;--card:#fff;--text:#222;--accent:#007aff;--input-bg:#fafafa;--input-border:#ccc}
+  body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,Arial;margin:12px}
+  .card{background:var(--card);padding:16px;border-radius:12px;margin-bottom:16px}
+  .row{display:flex;align-items:center;gap:12px}
+  label{display:block;margin-bottom:6px}
+  input[type=number]{width:100%;padding:10px;background:var(--input-bg);border:1px solid var(--input-border);border-radius:6px;color:var(--text);font-size:1rem}
+  .slider{width:100%}
+  button{background:var(--accent);color:#000;padding:10px 14px;border:none;border-radius:6px}
+  .meta{font-size:.85rem;color:var(--text);opacity:.8;margin-left:auto}
+  .chart-row{display:flex;gap:12px;flex-wrap:wrap}
+  .chart-card{flex:1;min-width:300px}
+  canvas{width:100% !important;height:260px !important}
+  @media(max-width:480px){canvas{height:180px !important}}
+</style>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+<button id="toggleMode">Toggle Theme</button>
+<h1>ARKVX NAV Dashboard (preview)</h1>
+<div class="card">
+  <h2>Portfolio Inputs</h2>
+  <label>Fund NAV</label>
+  <div class="row">
+    <input id="nav" type="number" value="20">
+    <div style="width:160px"><input id="navSlider" class="slider" type="range" min="5" max="50" step="1" value="20"></div>
+  </div>
+
+  <label>Partial Mark Already Reflected (%)</label>
+  <div class="row">
+    <input id="partial" type="number" step="0.01" value="0.30">
+    <div style="width:160px"><input id="partialSlider" class="slider" type="range" min="0" max="1" step="0.01" value="0.30"></div>
+  </div>
+
+  <button id="recalc">Recalculate</button>
+</div>
+
+<div class="card">
+  <h2>Holdings</h2>
+  <!-- Company rows: SpaceX, OpenAI, Anthropic -->
+  <div id="companies">
+    <div class="card company" data-key="spacex">
+      <h3>SpaceX <span class="meta">(source: ARKVX)</span></h3>
+      <label>Weight (%)</label>
+      <div class="row"><input id="w_spacex" type="number" step="0.0001" value="0.1138"><div style="width:160px"><input id="w_spacex_slider" class="slider" type="range" min="0" max="0.5" step="0.0001" value="0.1138"></div></div>
+      <label>Last Private Valuation (B$)</label>
+      <div class="row"><input id="last_spacex" type="number" value="800"><div style="width:160px"><input id="last_spacex_slider" class="slider" type="range" min="50" max="5000" step="1" value="800"></div><span id="last_spacex_max" class="meta">max: $5T</span></div>
+      <label>IPO Valuation (B$)</label>
+      <div class="row"><input id="ipo_spacex" type="number" value="1750"><div style="width:160px"><input id="ipo_spacex_slider" class="slider" type="range" min="50" max="5000" step="1" value="1750"></div><span id="ipo_spacex_max" class="meta">max: $5T</span></div>
+    </div>
+
+    <div class="card company" data-key="openai">
+      <h3>OpenAI <span class="meta">(source: reported private funding)</span></h3>
+      <label>Weight (%)</label>
+      <div class="row"><input id="w_openai" type="number" step="0.0001" value="0.0848"><div style="width:160px"><input id="w_openai_slider" class="slider" type="range" min="0" max="0.5" step="0.0001" value="0.0848"></div></div>
+      <label>Last Private Valuation (B$)</label>
+      <div class="row"><input id="last_openai" type="number" value="852"><div style="width:160px"><input id="last_openai_slider" class="slider" type="range" min="50" max="5000" step="1" value="852"></div><span id="last_openai_max" class="meta">max: $5T</span></div>
+      <label>IPO Valuation (B$)</label>
+      <div class="row"><input id="ipo_openai" type="number" value="852"><div style="width:160px"><input id="ipo_openai_slider" class="slider" type="range" min="50" max="5000" step="1" value="852"></div><span id="ipo_openai_max" class="meta">max: $5T</span></div>
+    </div>
+
+    <div class="card company" data-key="anthropic">
+      <h3>Anthropic <span class="meta">(source: reports)</span></h3>
+      <label>Weight (%)</label>
+      <div class="row"><input id="w_anthropic" type="number" step="0.0001" value="0.0640"><div style="width:160px"><input id="w_anthropic_slider" class="slider" type="range" min="0" max="0.5" step="0.0001" value="0.0640"></div></div>
+      <label>Last Private Valuation (B$)</label>
+      <div class="row"><input id="last_anthropic" type="number" value="75"><div style="width:160px"><input id="last_anthropic_slider" class="slider" type="range" min="10" max="5000" step="1" value="75"></div><span id="last_anthropic_max" class="meta">max: $5T</span></div>
+      <label>IPO Valuation (B$)</label>
+      <div class="row"><input id="ipo_anthropic" type="number" value="75"><div style="width:160px"><input id="ipo_anthropic_slider" class="slider" type="range" min="10" max="5000" step="1" value="75"></div><span id="ipo_anthropic_max" class="meta">max: $5T</span></div>
+    </div>
+  </div>
+
+  <h3>Outputs</h3>
+  <p>Repricing (per company) shown in chart below. Total NAV Impact: <span id="totalImpact"></span> New NAV: <span id="totalNewNav"></span></p>
+
+  <h3>Scenarios</h3>
+  <button id="base">Base (reset to ARKVX defaults)</button>
+  <button id="bull">Bull</button>
+  <button id="bear">Bear</button>
+</div>
+
+<div class="card chart-row">
+  <div class="chart-card card"><h3>Per-Company NAV Contribution</h3><canvas id="chartContrib"></canvas></div>
+  <div class="chart-card card"><h3>Holdings Weight</h3><canvas id="chartWeights"></canvas></div>
+</div>
+
+<script>
+// ARKVX dashboard script
+document.addEventListener('DOMContentLoaded', ()=>{
+  const HARD_MAX = 5000; // B$
+  let initialLoad = true;
+
+  const companies = [
+    {key:'spacex', name:'SpaceX', defaultWeight:0.1138, defaultLast:800, defaultIpo:1750},
+    {key:'openai', name:'OpenAI', defaultWeight:0.0848, defaultLast:852, defaultIpo:852},
+    {key:'anthropic', name:'Anthropic', defaultWeight:0.0640, defaultLast:75, defaultIpo:75}
+  ];
+
+  // Elements helper
+  const el = id => document.getElementById(id);
+  const toNum = v => Number(isFinite(v) ? v : parseFloat(v))
+
+  // Build refs for each company
+  const refs = {};
+  companies.forEach(c => {
+    refs[c.key] = {
+      w: el('w_'+c.key), wS: el('w_'+c.key+'_slider'),
+      last: el('last_'+c.key), lastS: el('last_'+c.key+'_slider'), lastMax: el('last_'+c.key+'_max'),
+      ipo: el('ipo_'+c.key), ipoS: el('ipo_'+c.key+'_slider'), ipoMax: el('ipo_'+c.key+'_max')
+    };
+  });
+
+  const nav = el('nav'), navS=el('navSlider'), partial=el('partial'), partialS=el('partialSlider');
+  const recalc = el('recalc'), baseBtn = el('base'), bullBtn = el('bull'), bearBtn = el('bear');
+  const totalImpactEl = el('totalImpact'), totalNewNavEl = el('totalNewNav');
+
+  // Charts
+  let chartContrib=null, chartWeights=null;
+
+  function formatMaxLabel(val){return val===HARD_MAX? '$5T' : val.toLocaleString() + ' B$'}
+
+  function updateSliderRanges(){
+    companies.forEach(c=>{
+      const r = refs[c.key];
+      const lastV = parseFloat(r.last.value) || 0;
+      const ipoV = parseFloat(r.ipo.value) || 0;
+      const defaultLastMax=200, defaultIpoMax=300;
+      let newLastMax = initialLoad ? HARD_MAX : Math.min(HARD_MAX, Math.max(defaultLastMax, Math.ceil(lastV*2)));
+      let newIpoMax = initialLoad ? HARD_MAX : Math.min(HARD_MAX, Math.max(defaultIpoMax, Math.ceil(ipoV*2)));
+      r.lastS.max = newLastMax; r.ipoS.max = newIpoMax;
+      r.lastMax.innerText = 'max: ' + formatMaxLabel(newLastMax);
+      r.ipoMax.innerText = 'max: ' + formatMaxLabel(newIpoMax);
+      if (parseFloat(r.lastS.value) > newLastMax) r.lastS.value = newLastMax;
+      if (parseFloat(r.ipoS.value) > newIpoMax) r.ipoS.value = newIpoMax;
+    });
+  }
+
+  function syncFromInput(input, slider){
+    let v = parseFloat(input.value);
+    if (!Number.isFinite(v)) return;
+    if (v>HARD_MAX){v=HARD_MAX; input.value = HARD_MAX}
+    if (v>parseFloat(slider.max)){slider.max = Math.min(HARD_MAX, Math.ceil(v*2))}
+    slider.value = input.value;
+    updateSliderRanges(); calculate();
+  }
+  function syncFromSlider(slider,input){input.value = slider.value; calculate();}
+
+  // Wire events
+  nav.addEventListener('input', ()=>syncFromInput(nav,navS)); navS.addEventListener('input', ()=>syncFromSlider(navS,nav));
+  partial.addEventListener('input', ()=>syncFromInput(partial,partialS)); partialS.addEventListener('input', ()=>syncFromSlider(partialS,partial));
+  companies.forEach(c=>{
+    const r = refs[c.key];
+    r.w.addEventListener('input', ()=>{r.wS.value=r.w.value; calculate();});
+    r.wS.addEventListener('input', ()=>{r.w.value=r.wS.value; calculate();});
+    r.last.addEventListener('input', ()=>syncFromInput(r.last,r.lastS));
+    r.last.addEventListener('change', ()=>syncFromInput(r.last,r.lastS));
+    r.last.addEventListener('blur', ()=>syncFromInput(r.last,r.lastS));
+    r.lastS.addEventListener('input', ()=>syncFromSlider(r.lastS,r.last));
+    r.ipo.addEventListener('input', ()=>syncFromInput(r.ipo,r.ipoS));
+    r.ipo.addEventListener('change', ()=>syncFromInput(r.ipo,r.ipoS));
+    r.ipo.addEventListener('blur', ()=>syncFromInput(r.ipo,r.ipoS));
+    r.ipoS.addEventListener('input', ()=>syncFromSlider(r.ipoS,r.ipo));
+  });
+
+  recalc.addEventListener('click', ()=>{ updateSliderRanges(); calculate(); });
+
+  // Scenarios
+  function resetToDefaults(){
+    companies.forEach(c=>{
+      const r = refs[c.key];
+      r.w.value = c.defaultWeight; r.wS.value = c.defaultWeight;
+      r.last.value = c.defaultLast; r.lastS.value = c.defaultLast;
+      // IPO default: equal to last (except SpaceX kept per requirement already in defaults above)
+      r.ipo.value = c.defaultIpo; r.ipoS.value = c.defaultIpo;
+    });
+    nav.value = 20; navS.value = 20; partial.value = 0.30; partialS.value = 0.30;
+    updateSliderRanges(); calculate();
+  }
+  baseBtn.addEventListener('click', ()=>{ resetToDefaults(); });
+
+  bullBtn.addEventListener('click', ()=>{
+    companies.forEach(c=>{
+      const r = refs[c.key];
+      // Weight +0.02
+      const wNew = Math.min(parseFloat(r.wS.max), Number((parseFloat(r.w)||0)+0.02).toFixed(4)); r.w.value=wNew; r.wS.value=wNew;
+      // Last -5%
+      let lastNew = Math.round((parseFloat(r.last)||0)*0.95); lastNew = Math.max(0, Math.min(HARD_MAX, lastNew)); r.last.value=lastNew; r.lastS.value=lastNew;
+      // IPO +15% (except keep SpaceX IPO as configured if needed - here we follow rule: everything except SpaceX keep IPO=last default on load; but bull should adjust current IPO values)
+      let ipoNew = Math.round((parseFloat(r.ipo)||0)*1.15); ipoNew = Math.max(0, Math.min(HARD_MAX, ipoNew)); r.ipo.value=ipoNew; r.ipoS.value=ipoNew;
+      // Partial -0.20
+      partial.value = Math.max(0, Math.min(1, (parseFloat(partial)||0)-0.20)); partialS.value=partial.value;
+    });
+    updateSliderRanges(); calculate();
+  });
+
+  bearBtn.addEventListener('click', ()=>{
+    companies.forEach(c=>{
+      const r = refs[c.key];
+      const wNew = Math.max(parseFloat(r.wS.min)||0, Number((parseFloat(r.w)||0)-0.03).toFixed(4)); r.w.value=wNew; r.wS.value=wNew;
+      let lastNew = Math.round((parseFloat(r.last)||0)*1.05); lastNew = Math.max(0, Math.min(HARD_MAX, lastNew)); r.last.value=lastNew; r.lastS.value=lastNew;
+      let ipoNew = Math.round((parseFloat(r.ipo)||0)*0.85); ipoNew = Math.max(0, Math.min(HARD_MAX, ipoNew)); r.ipo.value=ipoNew; r.ipoS.value=ipoNew;
+      partial.value = Math.max(0, Math.min(1, (parseFloat(partial)||0)+0.20)); partialS.value=partial.value;
+    });
+    updateSliderRanges(); calculate();
+  });
+
+  // Calculate overall repricing & new NAV
+  function calculate(){
+    const nav0 = parseFloat(nav.value)||0; const part = parseFloat(partial.value)||0;
+    const contributions = [];
+    let totalImpact = 0;
+    companies.forEach(c=>{
+      const r = refs[c.key];
+      const w = parseFloat(r.w.value)||0; const last = parseFloat(r.last.value)||0; const ipo = parseFloat(r.ipo.value)||0;
+      const repr = last>0 ? (ipo-last)/last : 0; const remaining = repr*(1-part); const imp = w*remaining; const contrib = nav0*(1+imp) - nav0;
+      contributions.push({name:c.name, w, last, ipo, repr, remaining, imp, contrib});
+      totalImpact += imp;
+    });
+    const newNav = nav0*(1+totalImpact);
+    totalImpactEl.innerText = (totalImpact*100).toFixed(2) + '%';
+    totalNewNavEl.innerText = newNav.toFixed(2);
+    updateCharts(contributions);
+  }
+
+  // Charts update
+  function updateCharts(contribs){
+    const labels = contribs.map(c=>c.name);
+    const contribVals = contribs.map(c=>+c.contrib.toFixed(3));
+    const weightVals = contribs.map(c=>+(c.w*100).toFixed(2));
+    // Contrib bar
+    if (chartContrib) chartContrib.destroy();
+    chartContrib = new Chart(document.getElementById('chartContrib'), {type:'bar',data:{labels, datasets:[{label:'NAV contribution (B$)', data:contribVals, backgroundColor:['#4fc3f7','#81c784','#ffb74d']} ]}, options:{responsive:true, maintainAspectRatio:false}});
+    // Weights pie
+    if (chartWeights) chartWeights.destroy();
+    chartWeights = new Chart(document.getElementById('chartWeights'), {type:'doughnut',data:{labels, datasets:[{data:weightVals, backgroundColor:['#4fc3f7','#81c784','#ffb74d']}]}, options:{responsive:true, maintainAspectRatio:false}});
+  }
+
+  // Theme toggle
+  document.getElementById('toggleMode').addEventListener('click', ()=>document.body.classList.toggle('light'));
+
+  // Initial setup
+  updateSliderRanges();
+  calculate();
+  initialLoad=false;
+});
+</script>
+</body>
+</html>

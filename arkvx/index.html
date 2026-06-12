@@ -18,6 +18,8 @@
   .chart-row{display:flex;gap:12px;flex-wrap:wrap}
   .chart-card{flex:1;min-width:300px}
   canvas{width:100% !important;height:260px !important}
+  .projection { font-size: 1.5rem; font-weight: 700; margin: 8px 0; color: var(--accent); }
+  .projection .median { font-size: 2rem; color: #000; background: var(--accent); padding: 6px 10px; border-radius:8px; display:inline-block; }
   @media(max-width:480px){canvas{height:180px !important}}
 </style>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -78,7 +80,13 @@
   </div>
 
   <h3>Outputs</h3>
-  <p>Repricing (per company) shown in chart below. Total NAV Impact: <span id="totalImpact"></span> New NAV: <span id="totalNewNav"></span></p>
+  <div id="projectionBlock">
+    <div class="projection">Projected New NAV (median): <span id="projNav" class="median">—</span></div>
+    <div>5th percentile: <strong id="mcP5">—</strong> &nbsp; | &nbsp; 95th percentile: <strong id="mcP95">—</strong></div>
+    <div style="margin-top:10px;"><button id="runMC">Run Monte Carlo</button> <span class="meta" id="mcMeta"></span></div>
+  </div>
+
+  <p style="margin-top:12px">Repricing (per company) shown in chart below. Total NAV Impact: <span id="totalImpact"></span> New NAV: <span id="totalNewNav"></span></p>
 
   <h3>Scenarios</h3>
   <button id="base">Base (reset to ARKVX defaults)</button>
@@ -89,6 +97,11 @@
 <div class="card chart-row">
   <div class="chart-card card"><h3>Per-Company NAV Contribution</h3><canvas id="chartContrib"></canvas></div>
   <div class="chart-card card"><h3>Holdings Weight</h3><canvas id="chartWeights"></canvas></div>
+</div>
+
+<div class="card">
+  <h3>Monte Carlo Distribution (sample)</h3>
+  <canvas id="chartMC"></canvas>
 </div>
 
 <script>
@@ -121,8 +134,13 @@ document.addEventListener('DOMContentLoaded', ()=>{
   const recalc = el('recalc'), baseBtn = el('base'), bullBtn = el('bull'), bearBtn = el('bear');
   const totalImpactEl = el('totalImpact'), totalNewNavEl = el('totalNewNav');
 
-  // Charts
-  let chartContrib=null, chartWeights=null;
+  // Monte Carlo elements
+  const runMCBtn = el('runMC');
+  const projNavEl = el('projNav');
+  const mcP5El = el('mcP5');
+  const mcP95El = el('mcP95');
+  const mcMeta = el('mcMeta');
+  let chartContrib=null, chartWeights=null, chartMC=null;
 
   function formatMaxLabel(val){return val===HARD_MAX? '$5T' : val.toLocaleString() + ' B$'}
 
@@ -192,7 +210,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
       const wNew = Math.min(parseFloat(r.wS.max), Number((parseFloat(r.w)||0)+0.02).toFixed(4)); r.w.value=wNew; r.wS.value=wNew;
       // Last -5%
       let lastNew = Math.round((parseFloat(r.last)||0)*0.95); lastNew = Math.max(0, Math.min(HARD_MAX, lastNew)); r.last.value=lastNew; r.lastS.value=lastNew;
-      // IPO +15% (except keep SpaceX IPO as configured if needed - here we follow rule: everything except SpaceX keep IPO=last default on load; but bull should adjust current IPO values)
+      // IPO +15%
       let ipoNew = Math.round((parseFloat(r.ipo)||0)*1.15); ipoNew = Math.max(0, Math.min(HARD_MAX, ipoNew)); r.ipo.value=ipoNew; r.ipoS.value=ipoNew;
       // Partial -0.20
       partial.value = Math.max(0, Math.min(1, (parseFloat(partial)||0)-0.20)); partialS.value=partial.value;
@@ -228,6 +246,63 @@ document.addEventListener('DOMContentLoaded', ()=>{
     totalNewNavEl.innerText = newNav.toFixed(2);
     updateCharts(contributions);
   }
+
+  // Monte Carlo
+  function randomNormal(mean, sd){
+    const u = Math.random(), v = Math.random();
+    return mean + Math.sqrt(-2*Math.log(u)) * Math.cos(2*Math.PI*v) * sd;
+  }
+
+  function runMonteCarlo(trials=2000){
+    const nav0 = parseFloat(nav.value) || 0;
+    const part = parseFloat(partial.value) || 0;
+    const results = [];
+
+    for (let i=0;i<trials;i++){
+      let totalImp = 0;
+      companies.forEach(c=>{
+        const r = refs[c.key];
+        const lastMu = parseFloat(r.last.value) || 0;
+        const ipoMu = parseFloat(r.ipo.value) || 0;
+        // scale SD to 5% of value with a minimum floor
+        const sdLast = Math.max(5, Math.abs(lastMu) * 0.05);
+        const sdIpo = Math.max(5, Math.abs(ipoMu) * 0.05);
+        const lastSample = Math.max(0.0001, randomNormal(lastMu, sdLast));
+        const ipoSample = Math.max(0.0001, randomNormal(ipoMu, sdIpo));
+        const repr = lastSample>0 ? (ipoSample - lastSample) / lastSample : 0;
+        const remaining = repr * (1 - part);
+        const w = parseFloat(r.w.value) || 0;
+        totalImp += w * remaining;
+      });
+      const newNav = nav0 * (1 + totalImp);
+      results.push(newNav);
+    }
+
+    results.sort((a,b)=>a-b);
+    const idx = n => Math.max(0, Math.min(results.length-1, Math.floor(n * results.length)));
+    const p5 = results[idx(0.05)];
+    const p50 = results[idx(0.50)];
+    const p95 = results[idx(0.95)];
+
+    mcP5El.innerText = p5.toFixed(2);
+    projNavEl.innerText = p50.toFixed(2);
+    mcP95El.innerText = p95.toFixed(2);
+    mcMeta.innerText = ` (n=${trials})`;
+
+    // update MC chart (show sample of sorted results)
+    if (chartMC) chartMC.destroy();
+    const sample = results.slice(0, Math.min(300, results.length));
+    chartMC = new Chart(document.getElementById('chartMC'), {
+      type: 'bar',
+      data: { labels: sample.map((_,i)=>i+1), datasets: [{ label: 'New NAV (sample)', data: sample, backgroundColor: sample.map(v=> v===p50? '#000000' : '#4fc3f7') }] },
+      options: { responsive:true, maintainAspectRatio:false }
+    });
+  }
+
+  runMCBtn.addEventListener('click', ()=>{
+    runMCBtn.disabled = true; runMCBtn.innerText = 'Running...';
+    setTimeout(()=>{ runMonteCarlo(2000); runMCBtn.disabled=false; runMCBtn.innerText='Run Monte Carlo'; }, 20);
+  });
 
   // Charts update
   function updateCharts(contribs){
